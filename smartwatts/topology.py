@@ -27,50 +27,70 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# Last modified : 21 March 2022
+
+##############################
+#
+# Imports
+#
+##############################
+from powerapi.quantity import PowerAPIQuantity, MHz, W
+
+
+##############################
+#
+# Classes
+#
+##############################
 class CPUTopology:
-    """
-    This class stores the necessary information about the CPU topology.
-    """
+    """ This class stores the necessary information about the CPU topology """
 
-    def __init__(self, tdp, freq_bclk, ratio_min, ratio_base, ratio_max):
-        """
-        Create a new CPU topology object.
-        :param tdp: TDP of the CPU in Watt
-        :param freq_bclk: Base clock in MHz
-        :param ratio_min: Maximum efficiency ratio
-        :param ratio_base: Base frequency ratio
-        :param ratio_max: Maximum frequency ratio (with Turbo-Boost)
-        """
-        self.tdp = tdp
-        self.freq_bclk = freq_bclk
-        self.ratio_min = ratio_min
-        self.ratio_base = ratio_base
-        self.ratio_max = ratio_max
+    def __init__(self, tdp: PowerAPIQuantity, freq_bclk: PowerAPIQuantity, ratio_min: PowerAPIQuantity,
+                 ratio_base: PowerAPIQuantity, ratio_max: PowerAPIQuantity):
+        """ Create a new CPU topology object
 
-    def get_min_frequency(self):
+            Args:
+                tdp: TDP of the CPU. It is transformed to Watt
+                freq_bclk: Base clock. It is transformed to MHz
+                ratio_min: Maximum efficiency ratio. It is transformed to MHz
+                ratio_base: Base frequency ratio. It is transformed to MHz
+                ratio_max: Maximum frequency ratio (with Turbo-Boost). It is transformed to MHz
         """
-        Compute and return the CPU max efficiency frequency.
-        :return: The CPU max efficiency frequency in MHz
-        """
-        return self.freq_bclk * self.ratio_min
+        self.tdp = tdp.to(W)
+        self.freq_bclk = freq_bclk.to(MHz)
+        self.ratio_min = ratio_min.to(MHz)
+        self.ratio_base = ratio_base.to(MHz)
+        self.ratio_max = ratio_max.to(MHz)
 
-    def get_base_frequency(self):
-        """
-        Compute and return the CPU base frequency.
-        :return: The CPU base frequency in MHz
-        """
-        return self.freq_bclk * self.ratio_base
+    def get_min_frequency(self) -> PowerAPIQuantity:
+        """ Compute and return the CPU max efficiency frequency
 
-    def get_max_frequency(self):
+            Return:
+                The CPU max efficiency frequency in MHz
         """
-        Compute and return the CPU maximum frequency. (Turbo-Boost included)
-        :return: The CPU maximum frequency in MHz
+
+        return self.freq_bclk * self.ratio_min.magnitude
+
+    def get_base_frequency(self) -> PowerAPIQuantity:
+        """ Compute and return the CPU base frequency
+
+            Return:
+                The CPU base frequency in MHz
         """
-        return self.freq_bclk * self.ratio_max
+        return self.freq_bclk * self.ratio_base.magnitude
+
+    def get_max_frequency(self) -> PowerAPIQuantity:
+        """ Compute and return the CPU maximum frequency. (Turbo-Boost included)
+
+            Return:
+                The CPU maximum frequency in MHz
+        """
+        return self.freq_bclk * self.ratio_max.magnitude
 
     def get_supported_frequencies(self):
+        """ Compute the supported frequencies for this CPU
+            Return:
+                A list of supported frequencies in MHz
         """
-        Compute the supported frequencies for this CPU.
-        :return: A list of supported frequencies in MHz
-        """
-        return list(range(self.get_min_frequency(), self.get_max_frequency() + 1, self.freq_bclk))
+        return list(range(self.get_min_frequency().magnitude, self.get_max_frequency().magnitude + 1,
+                          self.freq_bclk.magnitude))
