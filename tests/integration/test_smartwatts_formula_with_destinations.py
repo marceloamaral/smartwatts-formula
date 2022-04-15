@@ -43,7 +43,7 @@ from powerapi.destination import InfluxDestination
 from powerapi.quantity import MHz, W
 from powerapi.rx import Source
 from powerapi.rx.hwpc_report import HWPCReport, GROUPS_CN, create_hwpc_report_from_dict
-from powerapi.rx.report import TIMESTAMP_CN, SENSOR_CN, TARGET_CN
+from powerapi.rx.report import TIMESTAMP_CN, SENSOR_CN, TARGET_CN, DATE_FORMAT, TIME_CN
 from powerapi.rx.source import source
 
 from smartwatts.context import SmartWattsFormulaConfig, SmartWattsFormulaScope
@@ -70,7 +70,7 @@ INFLUX_DBNAME = "db_test_influx"
 @pytest.fixture
 def create_hwpc_report_1() -> HWPCReport:
     """ Creates a HWPC Report """
-    report_dict = {TIMESTAMP_CN: int(datetime.now().strftime("%Y%m%d%H%M%S")),
+    report_dict = {TIMESTAMP_CN: "2022-03-31T10:03:16.196Z",
                    SENSOR_CN: "sensor",
                    TARGET_CN: "all",
                    GROUPS_CN: {
@@ -131,7 +131,7 @@ def create_hwpc_report_1() -> HWPCReport:
 def create_hwpc_report_2() -> HWPCReport:
     """ Creates a HWPC Report """
     report_dict = {
-        TIMESTAMP_CN: int(datetime.now().strftime("%Y%m%d%H%M%S")),
+        TIMESTAMP_CN: "2022-03-31T10:03:17.196Z",
         SENSOR_CN: "sensor",
         TARGET_CN: "all",
         GROUPS_CN: {RAPL_GROUP:
@@ -188,7 +188,7 @@ def create_hwpc_report_2() -> HWPCReport:
 def create_hwpc_report_3() -> HWPCReport:
     """ Creates a HWPC Report """
     report_dict = {
-        TIMESTAMP_CN: int(datetime.now().strftime("%Y%m%d%H%M%S")),
+        TIMESTAMP_CN: "2022-03-31T10:03:19.196Z",
         SENSOR_CN: "sensor",
         TARGET_CN: "modest_leavitt",
         GROUPS_CN: {CORE_GROUP:
@@ -249,7 +249,7 @@ def create_hwpc_report_3() -> HWPCReport:
 @pytest.fixture
 def create_hwpc_report_4() -> HWPCReport:
     """ Creates a HWPC Report """
-    report_dict = {TIMESTAMP_CN: int(datetime.now().strftime("%Y%m%d%H%M%S")),
+    report_dict = {TIMESTAMP_CN: datetime.now().strftime(DATE_FORMAT),
                    SENSOR_CN: "sensor",
                    TARGET_CN: "all",
                    GROUPS_CN: {
@@ -318,6 +318,12 @@ def create_4_hwpc_reports(create_hwpc_report_1, create_hwpc_report_2, create_hwp
 
 
 @pytest.fixture
+def create_2_hwpc_reports(create_hwpc_report_3,
+                          create_hwpc_report_1) -> list:
+    return [create_hwpc_report_3, create_hwpc_report_1]
+
+
+@pytest.fixture
 def create_smartwatts_config() -> SmartWattsFormulaConfig:
     """ Creates a configuration """
 
@@ -343,14 +349,50 @@ def test_smartwatts_calls_1_time_influxdb_with_realtime_mode_and_4_reports(creat
 
     # Setup
     the_source = Source(MultipleReportSource(create_4_hwpc_reports))
-    the_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
+    influx_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
     the_formula = Smartwatts(create_smartwatts_config)
+
+    influx_dict = create_4_hwpc_reports[1].to_influx()
 
     # Exercise
 
-    source(the_source).pipe(the_formula).subscribe(the_destination)
+    source(the_source).pipe(the_formula).subscribe(influx_destination)
 
     # Check
-    assert len(the_formula.ticks) == 2  # There are only two ticks (process_report has been called once)
-    # assert len(the_destination.reports) == 1  # The destination is called once because one of the reports do not have
-    # all as target
+
+    assert len(the_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
+
+    influx_destination.client.switch_database(INFLUX_DBNAME)
+    result = influx_destination.client.query(
+        "SELECT * FROM power_consumption WHERE time={}".format(influx_dict[TIME_CN]))
+    result_list = list(result.get_points())
+
+    assert len(result_list) == 1  # Only One result has to be found
+
+
+def test_smartwatts_does_not_call__influxdb_with_realtime_mode_and_2_reports(create_smartwatts_config,
+                                                                             create_2_hwpc_reports):
+    """ Test that smartwatts formula works well with influxdb """
+
+    """ Tests if the formula works with four reports and real_time_mode = True """
+
+    # Setup
+    the_source = Source(MultipleReportSource(create_2_hwpc_reports))
+    influx_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
+    the_formula = Smartwatts(create_smartwatts_config)
+
+    influx_dict = create_2_hwpc_reports[1].to_influx()
+
+    # Exercise
+
+    source(the_source).pipe(the_formula).subscribe(influx_destination)
+
+    # Check
+    assert len(the_formula.ticks) == 2  # There are two ticks (process_report has not been called)
+
+    influx_destination.client.switch_database(INFLUX_DBNAME)
+    result = influx_destination.client.query(
+        "SELECT * FROM power_consumption WHERE time={}".format(influx_dict[TIME_CN]))
+    result_list = list(result.get_points())
+
+    assert len(result_list) == 0  # No result is found
