@@ -35,8 +35,9 @@
 # Classes
 #
 ##############################
-from typing import Optional
+from typing import Optional, Dict
 
+import pymongo
 from powerapi.rx import BaseSource, Destination
 from powerapi.rx.hwpc_report import HWPCReport
 from rx.core import Observer
@@ -150,3 +151,38 @@ class MultipleReportDestination(Destination):
 
     def on_error(self, error: Exception) -> None:
         raise error
+
+
+##############################
+#
+# Functions
+#
+##############################
+
+def gen_mongodb_database_test(uri: str, db_name: str, collection_name: str, content_list=[Dict]):
+    """ Prepares the database for testing purposes
+
+        Args:
+            uri: The uri for accessing mongo
+            db_name: name of the monngodb to be set up
+            collection_name: name of the collection to be created
+            content_list : dict with the content of the database. It is a List of dicts
+
+    """
+    mongo = pymongo.MongoClient(uri)
+
+    # We get the DATABASE. If it does not exist, it will be created
+    db = mongo[db_name]
+
+    # delete collection if it already exist
+    db[collection_name].drop()
+    db.create_collection(collection_name)
+
+    # Insert the content
+
+    for current_content in content_list:
+        db[collection_name].insert_one(current_content)
+
+    # Close the connection
+    mongo.close()
+

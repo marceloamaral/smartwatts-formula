@@ -51,7 +51,7 @@ from powerapi.sources import MongoSource
 from smartwatts.context import SmartWattsFormulaConfig, SmartWattsFormulaScope
 from smartwatts.rx_formula import RAPL_GROUP, MSR_GROUP, MPERF_EVENT, APERF_EVENT, CORE_GROUP, Smartwatts
 from smartwatts.topology import CPUTopology
-from tests.utils import MultipleReportSource, MultipleReportDestination
+from tests.utils import MultipleReportSource, MultipleReportDestination, gen_mongodb_database_test
 
 ##############################
 #
@@ -341,38 +341,6 @@ def create_smartwatts_config() -> SmartWattsFormulaConfig:
 
 ##############################
 #
-# Functions
-#
-##############################
-
-def _gen_base_db_test(uri, content_list=[Dict]):
-    """ Prepares the database for testing purposes
-
-        Args:
-            uri : The uri for accessing mongo
-            content_list : dict with the content of the database. It is a List of dicts
-
-    """
-    mongo = pymongo.MongoClient(uri)
-
-    # We get the DATABASE. If it does not exist, it will be created
-    db = mongo[MONGO_DATABASE_NAME]
-
-    # delete collection if it already exist
-    db[MONGO_INPUT_COLLECTION_NAME].drop()
-    db.create_collection(MONGO_INPUT_COLLECTION_NAME)
-
-    # Insert the content
-
-    for current_content in content_list:
-        db[MONGO_INPUT_COLLECTION_NAME].insert_one(current_content)
-
-    # Close the connection
-    mongo.close()
-
-
-##############################
-#
 # Tests
 #
 ##############################
@@ -385,7 +353,8 @@ def test_smartwatts_gets_report_from_mongodb_with_realtime_mode_and_4_reports(cr
     """
 
     # Setup
-    _gen_base_db_test(MONGO_URI, create_4_hwpc_dicts)
+    gen_mongodb_database_test(uri=MONGO_URI, content_list=create_4_hwpc_dicts,
+                              collection_name=MONGO_INPUT_COLLECTION_NAME, db_name=MONGO_DATABASE_NAME)
     mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
                                collection_name=MONGO_INPUT_COLLECTION_NAME,
                                report_type=HWPCReport, stream_mode=False)
@@ -409,7 +378,8 @@ def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_3_reports(c
     """
 
     # Setup
-    _gen_base_db_test(MONGO_URI, create_3_hwpc_dicts)
+    gen_mongodb_database_test(uri=MONGO_URI, content_list=create_3_hwpc_dicts,
+                              collection_name=MONGO_INPUT_COLLECTION_NAME, db_name=MONGO_DATABASE_NAME)
     mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
                                 collection_name=MONGO_INPUT_COLLECTION_NAME,
                                 report_type=HWPCReport, stream_mode=False)
@@ -434,7 +404,8 @@ def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_2_reports(c
     """
 
     # Setup
-    _gen_base_db_test(MONGO_URI, create_2_hwpc_dicts)
+    gen_mongodb_database_test(uri=MONGO_URI, content_list=create_2_hwpc_dicts,
+                              collection_name=MONGO_INPUT_COLLECTION_NAME, db_name=MONGO_DATABASE_NAME)
     mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
                                 collection_name=MONGO_INPUT_COLLECTION_NAME,
                                 report_type=HWPCReport, stream_mode=False)
