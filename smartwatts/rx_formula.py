@@ -47,8 +47,7 @@ from powerapi.quantity import PowerAPIQuantity, ms, W
 from powerapi.report import HWPCReport
 from powerapi.rx import Report
 from powerapi.rx.formula import Formula
-from powerapi.rx.power_report import create_power_report_from_values, POWER_CN
-from powerapi.rx.report import create_report_from_values
+from powerapi.rx.power_report import POWER_CN, PowerReport
 from sklearn.exceptions import NotFittedError
 
 from sklearn.linear_model._sgd_fast import Regression
@@ -413,7 +412,8 @@ class Smartwatts(Formula):
             'intercept': model.model.intercept_,
             'coef': str(model.model.coef_)
         }
-        return create_report_from_values(timestamp=timestamp, sensor=self.sensor, target=model.hash, metadata=metadata)
+        return Report.create_report_from_values(timestamp=timestamp, sensor=self.sensor, target=model.hash,
+                                                metadata=metadata)
 
     def _gen_power_report(self, timestamp: datetime, target: str, formula: str, raw_power: float, error: int,
                           power: PowerAPIQuantity,
@@ -437,8 +437,9 @@ class Smartwatts(Formula):
             'predict': raw_power,
             'error': error,
         })
-        return create_power_report_from_values(timestamp=timestamp, sensor=self.sensor, target=target, power=power,
-                                               metadata=metadata)
+        return PowerReport.create_report_from_values(timestamp=timestamp, sensor=self.sensor, target=target,
+                                                     power=power,
+                                                     metadata=metadata)
 
     def _gen_rapl_events_group(self, system_report: HWPCReport):
         """ Generate an events group with the RAPL reference event converted in Watts for the current socket

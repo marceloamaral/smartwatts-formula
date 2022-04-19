@@ -35,30 +35,33 @@
 # Imports
 #
 ##############################
-from datetime import datetime
 
+from datetime import datetime
+from typing import Dict
+
+import pymongo
 import pytest as pytest
-from powerapi.destination import InfluxDestination
 
 from powerapi.quantity import MHz, W
-from powerapi.rx import Source
-from powerapi.rx.hwpc_report import HWPCReport, GROUPS_CN, create_hwpc_report_from_dict
-from powerapi.rx.report import TIMESTAMP_CN, SENSOR_CN, TARGET_CN, DATE_FORMAT, TIME_CN
+from powerapi.rx.hwpc_report import GROUPS_CN, HWPCReport
+from powerapi.rx.report import TIMESTAMP_CN, SENSOR_CN, TARGET_CN, DATE_FORMAT
 from powerapi.rx.source import source
+from powerapi.sources import MongoSource
 
 from smartwatts.context import SmartWattsFormulaConfig, SmartWattsFormulaScope
 from smartwatts.rx_formula import RAPL_GROUP, MSR_GROUP, MPERF_EVENT, APERF_EVENT, CORE_GROUP, Smartwatts
 from smartwatts.topology import CPUTopology
-from tests.utils import MultipleReportSource
+from tests.utils import MultipleReportSource, MultipleReportDestination
 
 ##############################
 #
 # Constants
 #
 ##############################
-INFLUX_URI = "localhost"
-INFLUX_PORT = 8086
-INFLUX_DBNAME = "db_test_influx"
+MONGO_URI = "mongodb://localhost:27017/"
+MONGO_INPUT_COLLECTION_NAME = "test_smartwatts_input"
+MONGO_OUTPUT_COLLECTION_NAME = "test_smartwatts_output"
+MONGO_DATABASE_NAME = "smartwatts_tests"
 
 
 ##############################
@@ -68,7 +71,7 @@ INFLUX_DBNAME = "db_test_influx"
 ##############################
 
 @pytest.fixture
-def create_hwpc_report_1() -> HWPCReport:
+def create_hwpc_dict_1() -> Dict:
     """ Creates a HWPC Report """
     report_dict = {TIMESTAMP_CN: "2022-03-31T10:03:16.196Z",
                    SENSOR_CN: "sensor",
@@ -124,11 +127,11 @@ def create_hwpc_report_1() -> HWPCReport:
                                      "time_enabled": 503490955,
                                      "time_running": 503490955}}}}}
 
-    return create_hwpc_report_from_dict(report_dict)
+    return report_dict
 
 
 @pytest.fixture
-def create_hwpc_report_2() -> HWPCReport:
+def create_hwpc_dict_2() -> Dict:
     """ Creates a HWPC Report """
     report_dict = {
         TIMESTAMP_CN: "2022-03-31T10:03:17.196Z",
@@ -181,11 +184,11 @@ def create_hwpc_report_2() -> HWPCReport:
                                             "time_enabled": 2511729308,
                                             "time_running": 2511729308}}}}}
 
-    return create_hwpc_report_from_dict(report_dict)
+    return report_dict
 
 
 @pytest.fixture
-def create_hwpc_report_3() -> HWPCReport:
+def create_hwpc_dict_3() -> Dict:
     """ Creates a HWPC Report """
     report_dict = {
         TIMESTAMP_CN: "2022-03-31T10:03:19.196Z",
@@ -243,12 +246,12 @@ def create_hwpc_report_3() -> HWPCReport:
                                     "LLC_MISSES": 44165,
                                     "INSTRUCTIONS_RETIRED": 865509}}}}}
 
-    return create_hwpc_report_from_dict(report_dict)
+    return report_dict
 
 
 @pytest.fixture
-def create_hwpc_report_4() -> HWPCReport:
-    """ Creates a HWPC Report """
+def create_hwpc_dict_4() -> Dict:
+    """ Creates a HWPC Dict """
     report_dict = {TIMESTAMP_CN: datetime.now().strftime(DATE_FORMAT),
                    SENSOR_CN: "sensor",
                    TARGET_CN: "all",
@@ -303,24 +306,24 @@ def create_hwpc_report_4() -> HWPCReport:
                                      "time_enabled": 503490955,
                                      "time_running": 503490955}}}}}
 
-    return create_hwpc_report_from_dict(report_dict)
+    return report_dict
 
 
 @pytest.fixture
-def create_3_hwpc_reports(create_hwpc_report_1, create_hwpc_report_2, create_hwpc_report_3) -> list:
-    return [create_hwpc_report_1, create_hwpc_report_2, create_hwpc_report_3]
+def create_3_hwpc_dicts(create_hwpc_dict_4, create_hwpc_dict_2, create_hwpc_dict_3) -> list:
+    return [create_hwpc_dict_4, create_hwpc_dict_2, create_hwpc_dict_3]
 
 
 @pytest.fixture
-def create_4_hwpc_reports(create_hwpc_report_1, create_hwpc_report_2, create_hwpc_report_3,
-                          create_hwpc_report_4) -> list:
-    return [create_hwpc_report_3, create_hwpc_report_4, create_hwpc_report_1, create_hwpc_report_2]
+def create_4_hwpc_dicts(create_hwpc_dict_1, create_hwpc_dict_2, create_hwpc_dict_3,
+                        create_hwpc_dict_4) -> list:
+    return [create_hwpc_dict_3, create_hwpc_dict_4, create_hwpc_dict_1, create_hwpc_dict_2]
 
 
 @pytest.fixture
-def create_2_hwpc_reports(create_hwpc_report_3,
-                          create_hwpc_report_1) -> list:
-    return [create_hwpc_report_3, create_hwpc_report_1]
+def create_2_hwpc_dicts(create_hwpc_dict_3,
+                        create_hwpc_dict_1) -> list:
+    return [create_hwpc_dict_3, create_hwpc_dict_1]
 
 
 @pytest.fixture
@@ -338,57 +341,110 @@ def create_smartwatts_config() -> SmartWattsFormulaConfig:
 
 ##############################
 #
+# Functions
+#
+##############################
+
+def _gen_base_db_test(uri, content_list=[Dict]):
+    """ Prepares the database for testing purposes
+
+        Args:
+            uri : The uri for accessing mongo
+            content_list : dict with the content of the database. It is a List of dicts
+
+    """
+    mongo = pymongo.MongoClient(uri)
+
+    # We get the DATABASE. If it does not exist, it will be created
+    db = mongo[MONGO_DATABASE_NAME]
+
+    # delete collection if it already exist
+    db[MONGO_INPUT_COLLECTION_NAME].drop()
+    db.create_collection(MONGO_INPUT_COLLECTION_NAME)
+
+    # Insert the content
+
+    for current_content in content_list:
+        db[MONGO_INPUT_COLLECTION_NAME].insert_one(current_content)
+
+    # Close the connection
+    mongo.close()
+
+
+##############################
+#
 # Tests
 #
 ##############################
-def test_smartwatts_calls_1_time_influxdb_with_realtime_mode_and_4_reports(create_smartwatts_config,
-                                                                           create_4_hwpc_reports):
-    """ Test that smartwatts formula works well with influxdb """
+def test_smartwatts_gets_report_from_mongodb_with_realtime_mode_and_4_reports(create_smartwatts_config,
+                                                                              create_4_hwpc_dicts):
+    """ Test that smartwatts formula works well with mongo db as source.
+
+        Four reports are in the database and realtime mode is True
+
+    """
 
     # Setup
-    the_source = Source(MultipleReportSource(create_4_hwpc_reports))
-    influx_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
+    _gen_base_db_test(MONGO_URI, create_4_hwpc_dicts)
+    mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
+                               collection_name=MONGO_INPUT_COLLECTION_NAME,
+                               report_type=HWPCReport, stream_mode=False)
+    the_destination = MultipleReportDestination()
     the_formula = Smartwatts(create_smartwatts_config)
 
-    influx_dict = create_4_hwpc_reports[1].to_influx()
-
     # Exercise
-
-    source(the_source).pipe(the_formula).subscribe(influx_destination)
+    source(mongo_source).pipe(the_formula).subscribe(the_destination)
+    mongo_source.close()
 
     # Check
-
     assert len(the_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
+    assert len(the_destination.reports) == 1  # Only one report has been stored
 
-    influx_destination.client.switch_database(INFLUX_DBNAME)
-    result = influx_destination.client.query(
-        "SELECT * FROM power_consumption WHERE time={}".format(influx_dict[TIME_CN]))
-    result_list = list(result.get_points())
+def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_3_reports(create_smartwatts_config,
+                                                                                create_3_hwpc_dicts):
+    """ Test that smartwatts formula works well with mongo db as source.
 
-    assert len(result_list) == 1  # Only One result has to be found
+         Four reports are in the database and realtime mode is True
 
-
-def test_smartwatts_does_not_call__influxdb_with_realtime_mode_and_2_reports(create_smartwatts_config,
-                                                                             create_2_hwpc_reports):
-    """ Test that smartwatts formula works well with influxdb """
+    """
 
     # Setup
-    the_source = Source(MultipleReportSource(create_2_hwpc_reports))
-    influx_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
+    _gen_base_db_test(MONGO_URI, create_3_hwpc_dicts)
+    mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
+                                collection_name=MONGO_INPUT_COLLECTION_NAME,
+                                report_type=HWPCReport, stream_mode=False)
+    the_destination = MultipleReportDestination()
     the_formula = Smartwatts(create_smartwatts_config)
 
-    influx_dict = create_2_hwpc_reports[1].to_influx()
-
     # Exercise
-
-    source(the_source).pipe(the_formula).subscribe(influx_destination)
+    source(mongo_source).pipe(the_formula).subscribe(the_destination)
+    mongo_source.close()
 
     # Check
-    assert len(the_formula.ticks) == 2  # There are two ticks (process_report has not been called)
+    assert len(the_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
+    assert len(the_destination.reports) == 1  # Only one report has been stored
 
-    influx_destination.client.switch_database(INFLUX_DBNAME)
-    result = influx_destination.client.query(
-        "SELECT * FROM power_consumption WHERE time={}".format(influx_dict[TIME_CN]))
-    result_list = list(result.get_points())
 
-    assert len(result_list) == 0  # No result is found
+def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_2_reports(create_smartwatts_config,
+                                                                                create_2_hwpc_dicts):
+    """ Test that smartwatts formula works well with mongo db as source.
+
+        Four reports are in the database and realtime mode is True
+
+    """
+
+    # Setup
+    _gen_base_db_test(MONGO_URI, create_2_hwpc_dicts)
+    mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
+                                collection_name=MONGO_INPUT_COLLECTION_NAME,
+                                report_type=HWPCReport, stream_mode=False)
+    the_destination = MultipleReportDestination()
+    the_formula = Smartwatts(create_smartwatts_config)
+
+    # Exercise
+    source(mongo_source).pipe(the_formula).subscribe(the_destination)
+    mongo_source.close()
+
+    # Check
+    assert len(the_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
+    assert len(the_destination.reports) == 0  # The destination is not called
