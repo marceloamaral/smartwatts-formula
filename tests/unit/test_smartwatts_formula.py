@@ -41,7 +41,7 @@ from typing import Optional
 import pytest as pytest
 from powerapi.quantity import MHz, W
 from powerapi.rx import BaseSource, Destination
-from powerapi.rx.hwpc_report import HWPCReport, GROUPS_CN, create_hwpc_report_from_dict
+from powerapi.rx.hwpc_report import HWPCReport, GROUPS_CN
 from powerapi.rx.report import TIMESTAMP_CN, SENSOR_CN, TARGET_CN
 from powerapi.rx.source import source, Source
 from rx.core import Observer
@@ -118,7 +118,7 @@ def create_hwpc_report_1() -> HWPCReport:
                                      "time_enabled": 503490955,
                                      "time_running": 503490955}}}}}
 
-    return create_hwpc_report_from_dict(report_dict)
+    return HWPCReport.create_report_from_dict(report_dict)
 
 
 @pytest.fixture
@@ -175,7 +175,7 @@ def create_hwpc_report_2() -> HWPCReport:
                                             "time_enabled": 2511729308,
                                             "time_running": 2511729308}}}}}
 
-    return create_hwpc_report_from_dict(report_dict)
+    return HWPCReport.create_report_from_dict(report_dict)
 
 
 @pytest.fixture
@@ -237,7 +237,7 @@ def create_hwpc_report_3() -> HWPCReport:
                                     "LLC_MISSES": 44165,
                                     "INSTRUCTIONS_RETIRED": 865509}}}}}
 
-    return create_hwpc_report_from_dict(report_dict)
+    return HWPCReport.create_report_from_dict(report_dict)
 
 
 @pytest.fixture
@@ -297,7 +297,7 @@ def create_hwpc_report_with_current_timestamp() -> HWPCReport:
                                      "time_enabled": 503490955,
                                      "time_running": 503490955}}}}}
 
-    return create_hwpc_report_from_dict(report_dict)
+    return HWPCReport.create_report_from_dict(report_dict)
 
 
 @pytest.fixture

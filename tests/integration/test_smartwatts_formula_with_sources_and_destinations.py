@@ -76,7 +76,7 @@ MONGO_DATABASE_NAME = "db_smartwatts_mongo_influx_tests"
 @pytest.fixture
 def create_hwpc_dict_1() -> Dict:
     """ Creates a HWPC Report """
-    report_dict = {TIMESTAMP_CN: "2022-03-31T10:03:16.196Z",
+    report_dict = {TIMESTAMP_CN: "2022-03-31T10:03:16.196+00:00",
                    SENSOR_CN: "sensor",
                    TARGET_CN: "all",
                    GROUPS_CN: {
@@ -137,7 +137,7 @@ def create_hwpc_dict_1() -> Dict:
 def create_hwpc_dict_2() -> Dict:
     """ Creates a HWPC Report """
     report_dict = {
-        TIMESTAMP_CN: "2022-03-31T10:03:17.196Z",
+        TIMESTAMP_CN: "2022-03-31T10:03:17.196+00:00",
         SENSOR_CN: "sensor",
         TARGET_CN: "all",
         GROUPS_CN: {RAPL_GROUP:
@@ -194,7 +194,7 @@ def create_hwpc_dict_2() -> Dict:
 def create_hwpc_dict_3() -> Dict:
     """ Creates a HWPC Report """
     report_dict = {
-        TIMESTAMP_CN: "2022-03-31T10:03:19.196Z",
+        TIMESTAMP_CN: "2022-03-31T10:03:19.196+00:00",
         SENSOR_CN: "sensor",
         TARGET_CN: "modest_leavitt",
         GROUPS_CN: {CORE_GROUP:
@@ -255,7 +255,7 @@ def create_hwpc_dict_3() -> Dict:
 @pytest.fixture
 def create_hwpc_dict_4() -> Dict:
     """ Creates a HWPC Dict """
-    report_dict = {TIMESTAMP_CN: datetime.now().strftime(DATE_FORMAT),
+    report_dict = {TIMESTAMP_CN: datetime.now().strftime(DATE_FORMAT)+ '+00:00',  # We are 00 hours and 00 minutes ahead of UTC
                    SENSOR_CN: "sensor",
                    TARGET_CN: "all",
                    GROUPS_CN: {
