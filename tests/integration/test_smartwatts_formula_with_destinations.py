@@ -348,17 +348,17 @@ def test_smartwatts_calls_1_time_influxdb_with_realtime_mode_and_4_reports(creat
     # Setup
     the_source = Source(MultipleReportSource(create_4_hwpc_reports))
     influx_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
-    the_formula = Smartwatts(create_smartwatts_config)
+    smartwatts_formula = Smartwatts(create_smartwatts_config)
 
     influx_dict = create_4_hwpc_reports[1].to_influx()
 
     # Exercise
 
-    source(the_source).pipe(the_formula).subscribe(influx_destination)
+    source(the_source).pipe(smartwatts_formula).subscribe(influx_destination)
 
     # Check
 
-    assert len(the_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
+    assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
 
     influx_destination.client.switch_database(INFLUX_DBNAME)
     result = influx_destination.client.query(
@@ -375,16 +375,16 @@ def test_smartwatts_does_not_call__influxdb_with_realtime_mode_and_2_reports(cre
     # Setup
     the_source = Source(MultipleReportSource(create_2_hwpc_reports))
     influx_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
-    the_formula = Smartwatts(create_smartwatts_config)
+    smartwatts_formula = Smartwatts(create_smartwatts_config)
 
     influx_dict = create_2_hwpc_reports[1].to_influx()
 
     # Exercise
 
-    source(the_source).pipe(the_formula).subscribe(influx_destination)
+    source(the_source).pipe(smartwatts_formula).subscribe(influx_destination)
 
     # Check
-    assert len(the_formula.ticks) == 2  # There are two ticks (process_report has not been called)
+    assert len(smartwatts_formula.ticks) == 2  # There are two ticks (process_report has not been called)
 
     influx_destination.client.switch_database(INFLUX_DBNAME)
     result = influx_destination.client.query(

@@ -92,5 +92,5 @@ class CPUTopology:
             Return:
                 A list of supported frequencies in MHz
         """
-        return list(range(self.get_min_frequency().magnitude, self.get_max_frequency().magnitude + 1,
-                          self.freq_bclk.magnitude))
+        return list(range(int(self.get_min_frequency().magnitude), int(self.get_max_frequency().magnitude) + 1,
+                          int(self.freq_bclk.magnitude)))

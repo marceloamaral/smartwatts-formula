@@ -60,10 +60,10 @@ class SmartWattsFormulaConfig:
     """ Global config of the SmartWatts formula """
 
     def __init__(self,  rapl_event: str, min_samples_required: int, history_window_size: int,
-                 cpu_topology: CPUTopology = CPUTopology(tdp=125 * W, freq_bclk=100 * MHz, ratio_min=100*MHz,
-                                                         ratio_max=4000 * MHz, ratio_base=2300*MHz),
+                 cpu_topology: CPUTopology = CPUTopology(tdp=125 * W, freq_bclk=100 * MHz, ratio_min=100 * MHz,
+                                                         ratio_max=4000 * MHz, ratio_base=2300 * MHz),
                  scope: SmartWattsFormulaScope = SmartWattsFormulaScope.CPU,
-                 real_time_mode: bool = False, error_threshold: PowerAPIQuantity = 2*W,
+                 real_time_mode: bool = False, error_threshold: PowerAPIQuantity = 2.0*W,
                  reports_frequency: PowerAPIQuantity = 2*ms, core_domain_value: Optional[str] = None,
                  socket_domain_value: Optional[str] = None):
         """ Initialize a new formula config object

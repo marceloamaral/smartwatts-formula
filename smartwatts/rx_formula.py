@@ -42,6 +42,7 @@ from math import fabs, ldexp
 from pickle import dumps
 from typing import Dict
 
+from pandas import MultiIndex
 from powerapi import quantity
 from powerapi.quantity import PowerAPIQuantity, ms, W
 from powerapi.report import HWPCReport
@@ -50,7 +51,7 @@ from powerapi.rx.formula import Formula
 from powerapi.rx.power_report import POWER_CN, PowerReport
 from sklearn.exceptions import NotFittedError
 
-from sklearn.linear_model._sgd_fast import Regression
+from sklearn.linear_model import ElasticNet as Regression
 
 ##############################
 #
@@ -106,7 +107,7 @@ class History:
                 power_reference: Power reference corresponding to the events value
         """
         self.X.append(events_value)
-        self.y.append(power_reference)
+        self.y.append(power_reference.magnitude)
 
 
 class PowerModel:
@@ -177,7 +178,7 @@ class PowerModel:
                 NotFittedError when the model haven't been fitted
 
             Return:
-                Power estimation for the given events value
+                Power estimation for the given events value without units
         """
         return self.model.predict([self._extract_events_value(events)])[0]
 
@@ -194,8 +195,10 @@ class PowerModel:
         target_power = raw_target_power - (self.model.intercept_ * raw_target_power.units)
         global_power = raw_global_power - (self.model.intercept_ * raw_global_power.units)
 
-        ratio = target_power / global_power if global_power > 0.0 and target_power > 0.0 else 0.0
-        power = target_power if target_power > 0.0 else (0.0 * target_power.units)
+        ratio = target_power / global_power if global_power > 0.0 * raw_global_power.units \
+                                               and target_power > 0.0 * target_power.units \
+            else (0.0 * raw_global_power.units)
+        power = target_power if target_power > 0.0 * target_power.units else (0.0 * target_power.units)
         return power, ratio.magnitude
 
     def apply_intercept_share(self, target_power: PowerAPIQuantity, target_ratio: float):
@@ -224,8 +227,9 @@ class Smartwatts(Formula):
         super().__init__()
         self.config = config
         self.ticks = OrderedDict()  # Dictionary with timestamp as key and Dict as values
-        # Les values Dict have target as key and Report as value
+        #  values Dict have target as key and Report as value
         self.sensor = None
+        self.models = self._gen_models_dict()
 
     def process_report(self, report: Report):
         """ Required method for processing data as an observer of a source
@@ -274,7 +278,7 @@ class Smartwatts(Formula):
         last_layer_freq = 0
         for current_layer_freq in self.models.keys():
             if frequency.magnitude < current_layer_freq:
-                return last_layer_freq
+                return last_layer_freq * quantity.DEFAULT_FREQUENCY_UNIT
             last_layer_freq = current_layer_freq
 
         return last_layer_freq * quantity.DEFAULT_FREQUENCY_UNIT
@@ -288,7 +292,7 @@ class Smartwatts(Formula):
             Return:
                 Average frequency of the Package
         """
-        return (self.cpu_topology.get_base_frequency() * system_msr[APERF_EVENT]) / system_msr[MPERF_EVENT]
+        return (self.config.cpu_topology.get_base_frequency() * system_msr[APERF_EVENT]) / system_msr[MPERF_EVENT]
 
     def get_power_model(self, system_core: Dict):
         """ Fetch the suitable power model for the current frequency
@@ -336,6 +340,7 @@ class Smartwatts(Formula):
 
         # compute RAPL power report TODO How to compute the error here
         rapl_power = rapl[self.config.rapl_event]
+        current_used_power_unit = rapl_power.units
         power_reports.append(self._gen_power_report(timestamp=timestamp, target=RAPL_GROUP, error=0,
                                                     formula=self.config.rapl_event, raw_power=0.0, power=rapl_power,
                                                     ratio=1.0, metadata={}))
@@ -349,23 +354,24 @@ class Smartwatts(Formula):
 
         # compute Global target power report
         try:
-            raw_global_power = model.compute_power_estimation(global_core)
+            # TODO using rapl_power.units is ok here ?
+            raw_global_power = model.compute_power_estimation(global_core) * current_used_power_unit
 
             # compute power model error from reference TODO this error is ok for global ?
-            model_error = fabs(rapl_power - raw_global_power)
+            model_error = fabs(rapl_power.magnitude - raw_global_power.magnitude) * current_used_power_unit
 
             power_reports.append(self._gen_power_report(timestamp=timestamp, target=GLOBAL_GROUP, formula=model.hash,
                                                         raw_power=raw_global_power, power=raw_global_power, ratio=1.0,
                                                         metadata={}, error=model_error))
         except NotFittedError:
             model.store_report_in_history(rapl_power, global_core)
-            model.learn_power_model(self.config.min_samples_required, 0.0, self.config.cpu_topology.tdp)
+            model.learn_power_model(self.config.min_samples_required, 0.0, self.config.cpu_topology.tdp.to(W).magnitude)
             return power_reports, formula_reports
 
         # compute per-target power report
         for target_name, target_report in hwpc_reports.items():
             target_core = self._gen_core_events_group(target_report)
-            raw_target_power = model.compute_power_estimation(target_core)
+            raw_target_power = model.compute_power_estimation(target_core) * current_used_power_unit
             target_power, target_ratio = model.cap_power_estimation(raw_target_power, raw_global_power)
             target_power = model.apply_intercept_share(target_power, target_ratio)
             power_reports.append(
@@ -374,18 +380,18 @@ class Smartwatts(Formula):
                     target=target_name,
                     formula=model.hash,
                     raw_power=raw_target_power,
-                    target_power=target_power,
+                    power=target_power,
                     ratio=target_ratio,
-                    metadata=target_report.metadata,
-                    error=fabs(target_power - raw_global_power))
-            )
+                    metadata=target_report.get_metadata(),
+                    error=fabs((target_power - raw_global_power).magnitude) * current_used_power_unit
+                ))
 
         # store global report
         model.store_report_in_history(rapl_power, global_core)
 
         # learn new power model if error exceeds the error threshold
         if model_error > self.config.error_threshold:
-            model.learn_power_model(self.config.min_samples_required, 0.0, self.config.cpu_topology.tdp)
+            model.learn_power_model(self.config.min_samples_required, 0.0, self.config.cpu_topology.tdp.to(W).magnitude)
 
         # store information about the power model used for this tick
         formula_reports.append(self._gen_formula_report(timestamp, pkg_frequency, model, model_error))
@@ -415,7 +421,8 @@ class Smartwatts(Formula):
         return Report.create_report_from_values(timestamp=timestamp, sensor=self.sensor, target=model.hash,
                                                 metadata=metadata)
 
-    def _gen_power_report(self, timestamp: datetime, target: str, formula: str, raw_power: float, error: int,
+    def _gen_power_report(self, timestamp: datetime, target: str, formula: str, raw_power: PowerAPIQuantity,
+                          error: PowerAPIQuantity,
                           power: PowerAPIQuantity,
                           ratio: float, metadata: Dict):
 
@@ -456,6 +463,8 @@ class Smartwatts(Formula):
         # Look for the values related to RAPL
 
         try:
+            # if not system_report.index.is_monotonic_increasing:
+            #    system_report = system_report.sort_index()
             rapl_report = system_report.loc[system_report.get_timestamp(), system_report.get_sensor(),
                                             system_report.get_target(), RAPL_GROUP, self.config.socket_domain_value]
         except KeyError:

@@ -52,7 +52,6 @@ from smartwatts.exception import SmartWattsException
 from smartwatts.rx_formula import Smartwatts, RAPL_GROUP, MSR_GROUP, MPERF_EVENT, APERF_EVENT, CORE_GROUP
 from smartwatts.topology import CPUTopology
 
-
 ##############################
 #
 # Fixtures
@@ -352,6 +351,7 @@ def create_smartwatts_config_report_with_unknown_socket() -> SmartWattsFormulaCo
                                    cpu_topology=cpu_topology, real_time_mode=False, scope=SmartWattsFormulaScope.CPU,
                                    socket_domain_value="10")
 
+
 ##############################
 #
 # Tests
@@ -364,16 +364,16 @@ def test_smartwatts_not_processing_just_one_report(create_hwpc_report_1, create_
     # Setup
     the_source = Source(SimpleSource(create_hwpc_report_1))
     the_destination = SimpleReportDestination()
-    the_formula = Smartwatts(create_smartwatts_config)
+    smartwatts_formula = Smartwatts(create_smartwatts_config)
 
     # Exercise
 
-    source(the_source).pipe(the_formula).subscribe(the_destination)
+    source(the_source).pipe(smartwatts_formula).subscribe(the_destination)
 
     # Check
     assert the_destination.report is None  # The destination is not called
-    assert len(the_formula.ticks) == 1  # There is at least one tick (process_report has been called)
-    assert the_formula.sensor == create_hwpc_report_1.get_sensor()  # The sensor of the formula is the sensor report
+    assert len(smartwatts_formula.ticks) == 1  # There is at least one tick (process_report has been called)
+    assert smartwatts_formula.sensor == create_hwpc_report_1.get_sensor()  # The sensor of the formula is the sensor report
 
 
 def test_smartwatts_process_report_does_not_call_destination_with_realtime_mode_and_3_reports(create_3_hwpc_reports,
@@ -384,14 +384,14 @@ def test_smartwatts_process_report_does_not_call_destination_with_realtime_mode_
 
     the_source = Source(MultipleReportSource(create_3_hwpc_reports))
     the_destination = SimpleReportDestination()
-    the_formula = Smartwatts(create_smartwatts_config)
+    smartwatts_formula = Smartwatts(create_smartwatts_config)
 
     # Exercise
 
-    source(the_source).pipe(the_formula).subscribe(the_destination)
+    source(the_source).pipe(smartwatts_formula).subscribe(the_destination)
 
     # Check
-    assert len(the_formula.ticks) == 3  # The three ticks has been processed (process_report has been called)
+    assert len(smartwatts_formula.ticks) == 3  # The three ticks has been processed (process_report has been called)
     assert the_destination.report is None  # The destination is called
 
 
@@ -403,33 +403,33 @@ def test_smartwatts_process_report_calls_destination_with_realtime_mode_and_3_re
     create_smartwatts_config.real_time_mode = True
     the_source = Source(MultipleReportSource(create_3_hwpc_reports))
     the_destination = MultipleReportDestination()
-    the_formula = Smartwatts(create_smartwatts_config)
+    smartwatts_formula = Smartwatts(create_smartwatts_config)
 
     # Exercise
 
-    source(the_source).pipe(the_formula).subscribe(the_destination)
+    source(the_source).pipe(smartwatts_formula).subscribe(the_destination)
 
     # Check
-    assert len(the_formula.ticks) == 2  # There are only two ticks (process_report has been called once)
+    assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called once)
     assert len(the_destination.reports) == 1  # The destination is called
 
 
 def test_smartwatts_process_report_calls_1_time_destination_with_realtime_mode_and_4_reports(create_4_hwpc_reports,
-                                                                                              create_smartwatts_config):
+                                                                                             create_smartwatts_config):
     """ Tests if the formula works with four reports and real_time_mode = True """
 
     # Setup
     create_smartwatts_config.real_time_mode = True
     the_source = Source(MultipleReportSource(create_4_hwpc_reports))
     the_destination = MultipleReportDestination()
-    the_formula = Smartwatts(create_smartwatts_config)
+    smartwatts_formula = Smartwatts(create_smartwatts_config)
 
     # Exercise
 
-    source(the_source).pipe(the_formula).subscribe(the_destination)
+    source(the_source).pipe(smartwatts_formula).subscribe(the_destination)
 
     # Check
-    assert len(the_formula.ticks) == 2  # There are only two ticks (process_report has been called once)
+    assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called once)
     assert len(the_destination.reports) == 1  # The destination is called once because one of the reports do not have
     # all as target
 
@@ -441,15 +441,15 @@ def test_smartwatts_process_report_throws_exception_when_rapl_event_does_not_exi
     create_smartwatts_config_report_with_unknown_event.real_time_mode = True
     the_source = Source(MultipleReportSource(create_3_hwpc_reports))
     the_destination = MultipleReportDestination()
-    the_formula = Smartwatts(create_smartwatts_config_report_with_unknown_event)
+    smartwatts_formula = Smartwatts(create_smartwatts_config_report_with_unknown_event)
 
     # Exercise
     with pytest.raises(SmartWattsException) as exec_info:
-        source(the_source).pipe(the_formula).subscribe(the_destination)
+        source(the_source).pipe(smartwatts_formula).subscribe(the_destination)
 
     # Check
     assert len(the_destination.reports) == 0  # The destination is not called because of the exception
-    assert len(the_formula.ticks) == 2  # Because of a tick, we get the exception
+    assert len(smartwatts_formula.ticks) == 2  # Because of a tick, we get the exception
 
 
 def test_smartwatts_process_report_throws_exception_when_socket_does_not_exist(create_3_hwpc_reports,
@@ -459,11 +459,11 @@ def test_smartwatts_process_report_throws_exception_when_socket_does_not_exist(c
     create_smartwatts_config_report_with_unknown_socket.real_time_mode = True
     the_source = Source(MultipleReportSource(create_3_hwpc_reports))
     the_destination = MultipleReportDestination()
-    the_formula = Smartwatts(create_smartwatts_config_report_with_unknown_socket)
+    smartwatts_formula = Smartwatts(create_smartwatts_config_report_with_unknown_socket)
 
     # Exercise
     with pytest.raises(SmartWattsException) as exec_info:
-        source(the_source).pipe(the_formula).subscribe(the_destination)
+        source(the_source).pipe(smartwatts_formula).subscribe(the_destination)
 
     assert len(the_destination.reports) == 0  # The destination is not called because of the exception
-    assert len(the_formula.ticks) == 2  # Because of a tick, we get the exception
+    assert len(smartwatts_formula.ticks) == 2  # Because of a tick, we get the exception
