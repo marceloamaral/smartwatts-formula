@@ -51,16 +51,16 @@ class CPUTopology:
 
             Args:
                 tdp: TDP of the CPU. It is transformed to Watt
-                freq_bclk: Base clock. It is transformed to MHz
-                ratio_min: Maximum efficiency ratio. It is transformed to MHz
-                ratio_base: Base frequency ratio. It is transformed to MHz
-                ratio_max: Maximum frequency ratio (with Turbo-Boost). It is transformed to MHz
+                freq_bclk: Base clock. It is transformed to MHz and divided by 100
+                ratio_min: Maximum efficiency ratio. It is transformed to MHz and divided by 100
+                ratio_base: Base frequency ratio. It is transformed to MHz and divided by 100
+                ratio_max: Maximum frequency ratio (with Turbo-Boost). It is transformed to MHz and divided by
         """
         self.tdp = tdp.to(W)
-        self.freq_bclk = freq_bclk.to(MHz)
-        self.ratio_min = ratio_min.to(MHz)
-        self.ratio_base = ratio_base.to(MHz)
-        self.ratio_max = ratio_max.to(MHz)
+        self.freq_bclk = freq_bclk.to(MHz) / 100
+        self.ratio_min = ratio_min.to(MHz) / 100
+        self.ratio_base = ratio_base.to(MHz) / 100
+        self.ratio_max = ratio_max.to(MHz) / 100
 
     def get_min_frequency(self) -> PowerAPIQuantity:
         """ Compute and return the CPU max efficiency frequency

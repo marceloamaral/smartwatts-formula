@@ -74,7 +74,7 @@ def create_smartwatts_config() -> SmartWattsFormulaConfig:
 
     return SmartWattsFormulaConfig(rapl_event="RAPL_ENERGY_PKG", min_samples_required=10, history_window_size=60,
                                    cpu_topology=cpu_topology, real_time_mode=False, scope=SmartWattsFormulaScope.CPU,
-                                   socket_domain_value="0", reports_frequency=500 * ms)
+                                   socket_domain_value="0", reports_frequency=1000 * ms)
 
 
 if __name__ == "__main__":
