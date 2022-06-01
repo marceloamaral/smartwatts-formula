@@ -42,13 +42,13 @@ from math import fabs, ldexp
 from pickle import dumps
 from typing import Dict
 
-from pandas import MultiIndex
 from powerapi import quantity
 from powerapi.quantity import PowerAPIQuantity, ms, W
 from powerapi.report import HWPCReport
-from powerapi.rx import Report
+from powerapi.rx import Report, HWPCReportsGroup
 from powerapi.rx.formula import Formula
-from powerapi.rx.power_report import POWER_CN, PowerReport
+from powerapi.rx.power_reports_group import PowerReportsGroup
+from powerapi.rx.reports_group import ReportsGroup
 from sklearn.exceptions import NotFittedError
 
 from sklearn.linear_model import ElasticNet as Regression
@@ -67,6 +67,8 @@ APERF_EVENT = 'APERF'
 MPERF_EVENT = 'MPERF'
 
 TIME_EVENT_PREFIX = 'time_'
+
+ALL_TARGET = 'all'
 
 ##############################
 #
@@ -231,15 +233,19 @@ class Smartwatts(Formula):
         self.sensor = None
         self.models = self._gen_models_dict()
 
-    def process_report(self, report: Report):
+    def process_report(self, reports_group: ReportsGroup):
         """ Required method for processing data as an observer of a source
 
             Args:
-                report: The operator (e.g. a destination) that will process the output of the formula
+                reports_group: The operator (e.g. a destination) that will process the output of the formula
         """
 
-        self.ticks.setdefault(report.get_timestamp(), {}).update({report.get_target(): report})
-        self.sensor = report.get_sensor()
+        self.sensor = reports_group.sensor
+        timestamp_dict = self.ticks.setdefault(reports_group.timestamp, {})
+
+        for current_target in reports_group.report.get_targets():
+            timestamp_dict.update({current_target: reports_group})
+
 
         # start to process the oldest tick only after receiving at least 5 ticks.
         # we wait before processing the ticks in order to mitigate the possible delay of the sensor/database.
@@ -321,7 +327,7 @@ class Smartwatts(Formula):
             Return :
                 Power reports of the running target(s)
         """
-        timestamp, hwpc_reports = self.ticks.popitem(last=False)
+        timestamp, hwpc_reports_group = self.ticks.popitem(last=False)
 
         # reports of the current tick
         power_reports = []
@@ -329,14 +335,14 @@ class Smartwatts(Formula):
 
         # prepare required events group of Global target
         try:
-            global_report = hwpc_reports.pop('all')
+            global_reports_group = hwpc_reports_group.pop(ALL_TARGET)
         except KeyError:
             # cannot process this tick without the reference measurements
             return power_reports, formula_reports
 
-        rapl = self._gen_rapl_events_group(global_report)
-        avg_msr = self._gen_msr_events_group(global_report)
-        global_core = self._gen_agg_core_report_from_running_targets(hwpc_reports)
+        rapl = self._gen_rapl_events_group(global_reports_group)
+        avg_msr = self._gen_msr_events_group(global_reports_group)
+        global_core = self._gen_agg_core_report_from_running_targets(hwpc_reports_group)
 
         # compute RAPL power report TODO How to compute the error here
         rapl_power = rapl[self.config.rapl_event]
@@ -369,7 +375,7 @@ class Smartwatts(Formula):
             return power_reports, formula_reports
 
         # compute per-target power report
-        for target_name, target_report in hwpc_reports.items():
+        for target_name, target_report in hwpc_reports_group.items():
             target_core = self._gen_core_events_group(target_report)
             raw_target_power = model.compute_power_estimation(target_core) * current_used_power_unit
             target_power, target_ratio = model.cap_power_estimation(raw_target_power, raw_global_power)
@@ -382,7 +388,7 @@ class Smartwatts(Formula):
                     raw_power=raw_target_power,
                     power=target_power,
                     ratio=target_ratio,
-                    metadata=target_report.get_metadata(),
+                    metadata=target_report.meta.metadata,
                     error=fabs((target_power - raw_global_power).magnitude) * current_used_power_unit
                 ))
 
@@ -418,8 +424,8 @@ class Smartwatts(Formula):
             'intercept': model.model.intercept_,
             'coef': str(model.model.coef_)
         }
-        return Report.create_report_from_values(timestamp=timestamp, sensor=self.sensor, target=model.hash,
-                                                metadata=metadata)
+        return ReportsGroup.create_reports_group_from_values(timestamp=timestamp, sensor=self.sensor, target=model.hash,
+                                                             metadata=metadata)
 
     def _gen_power_report(self, timestamp: datetime, target: str, formula: str, raw_power: PowerAPIQuantity,
                           error: PowerAPIQuantity,
@@ -444,15 +450,16 @@ class Smartwatts(Formula):
             'predict': raw_power,
             'error': error,
         })
-        return PowerReport.create_report_from_values(timestamp=timestamp, sensor=self.sensor, target=target,
-                                                     power=power,
-                                                     metadata=metadata)
+        return PowerReportsGroup.create_reports_group_from_values(timestamp=timestamp, sensor=self.sensor,
+                                                                  target=target,
+                                                                  power=power,
+                                                                  metadata=metadata)
 
-    def _gen_rapl_events_group(self, system_report: HWPCReport):
+    def _gen_rapl_events_group(self, system_report_group: HWPCReportsGroup):
         """ Generate an events group with the RAPL reference event converted in Watts for the current socket
 
             Args:
-                system_report: The HWPC report of the System target
+                system_report_group: The HWPC report group of the target System
             Return:
                 A dictionary containing the RAPL reference event with its value converted in Watts
         """
@@ -462,86 +469,75 @@ class Smartwatts(Formula):
 
         # Look for the values related to RAPL
 
-        try:
-            # if not system_report.index.is_monotonic_increasing:
-            #    system_report = system_report.sort_index()
-            rapl_report = system_report.loc[system_report.get_timestamp(), system_report.get_sensor(),
-                                            system_report.get_target(), RAPL_GROUP, self.config.socket_domain_value]
-        except KeyError:
-            raise SmartWattsException(msg=create_exception_message_missing_index(entity_name=
-                                                                                 self.config.socket_domain_value,
-                                                                                 group_name=RAPL_GROUP,
-                                                                                 entity_type="socket"))
-
         # event_value = system_report.loc[(system_report.get_timestamp(), system_report.get_sensor(),
         #                                 system_report.get_target()), 'rapl', self.socket].at[self.config.rapl_event]
-        try:
-            event_value = rapl_report[self.config.rapl_event][
-                rapl_report.index[0]]  # The column name is the rapl_event name
 
-            energy = ldexp(event_value, -32) / (self.config.reports_frequency.to(ms).magnitude / 1000)
-        except KeyError:
+        event_value = system_report_group.get_event_value_first_found_core(target=ALL_TARGET, group=RAPL_GROUP,
+                                                                           socket=self.config.socket_domain_value,
+                                                                           event_name=self.config.rapl_event)
+
+        if event_value is None:
             raise SmartWattsException(msg=create_exception_message_missing_index(entity_name=
                                                                                  self.config.rapl_event,
                                                                                  group_name=RAPL_GROUP,
-                                                                                 entity_type="rapl event"))
+                                                                                 entity_type="event_value"))
+
+        energy = ldexp(event_value, -32) / (self.config.reports_frequency.to(ms).magnitude / 1000)
 
         return {self.config.rapl_event: energy * W}
 
-    def _gen_msr_events_group(self, system_report: HWPCReport):
+    def _gen_msr_events_group(self, system_reports_group: HWPCReportsGroup):
         """ Generate an events group with the average of the MSR counters for the current socket
 
             Args:
-                system_report: The HWPC report of the System target
+                system_reports_group: The HWPC reports group of the System target
             Return:
                 A dictionary containing the average of the MSR counters
         """
         mrs_average_values_dict = defaultdict(int)
 
         # We get the mrs values
-        try:
-            mrs_report = system_report.loc[system_report.get_timestamp(), system_report.get_sensor(),
-                                           system_report.get_target(), MSR_GROUP, self.config.socket_domain_value]
-        except KeyError:
+
+        mrs_average_values_dict = system_reports_group.compute_group_event_averages(group=MSR_GROUP, target=ALL_TARGET,
+                                                                                    socket=self.config.socket_domain_value)
+
+        if mrs_average_values_dict is None:
             raise SmartWattsException(msg=create_exception_message_missing_index(entity_name=
                                                                                  self.config.socket_domain_value,
                                                                                  group_name=MSR_GROUP,
-                                                                                 entity_type="socket"))
-
-        for event_name in mrs_report.columns:  # We compute the average
-            mrs_average_values_dict[event_name] = mrs_report[event_name].mean()
+                                                                                 entity_type="event"))
 
         return mrs_average_values_dict
 
-    def _gen_core_events_group(self, report: HWPCReport):
+    def _gen_core_events_group(self, reports_group: HWPCReportsGroup):
         """ Generate an events group with Core events for the current socket
 
             The events value are the sum of the value for each CPU.
 
             Args:
-                report: The HWPC report of any target
+                reports_group: The HWPC report group of any targets
 
             Return:
-                A dictionary containing the Core events of the current socket
+                A dictionary containing the Core events time sum of the current socket
         """
         # We get the core values
-        try:
 
-            core_event_report = report.loc[report.get_timestamp(), report.get_sensor(),
-                                           report.get_target(), CORE_GROUP, self.config.socket_domain_value]
-        except KeyError:
+        core_events_group_dict = reports_group.compute_group_event_sum_excluding_target(group=CORE_GROUP,
+                                                                                        target=ALL_TARGET,
+                                                                                        socket=self.config.socket_domain_value)
+        if core_events_group_dict is None:
             raise SmartWattsException(msg=create_exception_message_missing_index(entity_name=
                                                                                  self.config.socket_domain_value,
                                                                                  group_name=CORE_GROUP,
-                                                                                 entity_type="socket"))
+                                                                                 entity_type="event"))
 
-        core_events_group_dict = defaultdict(int)
-
-        for event_name in core_event_report.columns:  # We add all the events_values uf they are to related to time
+        core_time_events_group_dict = {}
+        for event_name, event_sum in core_events_group_dict.items():  # We add all the events_values if they are to
+            # related to time
             if not event_name.startswith(TIME_EVENT_PREFIX):
-                core_events_group_dict[event_name] = core_event_report[event_name].sum()
+                core_time_events_group_dict[event_name] = event_sum
 
-        return core_events_group_dict
+        return core_time_events_group_dict
 
     def _gen_agg_core_report_from_running_targets(self, targets_report):
         """ Generate an aggregate Core events group of the running targets for the current socket

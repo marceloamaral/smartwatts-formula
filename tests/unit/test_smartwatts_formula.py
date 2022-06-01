@@ -41,8 +41,8 @@ from typing import Optional
 import pytest as pytest
 from powerapi.quantity import MHz, W
 from powerapi.rx import BaseSource, Destination
-from powerapi.rx.hwpc_report import HWPCReport, GROUPS_CN
-from powerapi.rx.report import TIMESTAMP_CN, SENSOR_CN, TARGET_CN
+from powerapi.rx.hwpc_reports_group import HWPCReportsGroup, GROUPS_CN
+from powerapi.rx.reports_group import TIMESTAMP_CN, SENSOR_CN, TARGET_CN
 from powerapi.rx.source import source, Source
 from rx.core import Observer
 from rx.core.typing import Scheduler
@@ -61,7 +61,7 @@ from tests.utils import SimpleSource, SimpleReportDestination, MultipleReportSou
 
 
 @pytest.fixture
-def create_hwpc_report_1() -> HWPCReport:
+def create_hwpc_reports_group_1() -> HWPCReportsGroup:
     """ Creates a HWPC Report """
     report_dict = {TIMESTAMP_CN: "2022-03-31T10:03:13.686Z",
                    SENSOR_CN: "sensor",
@@ -117,12 +117,12 @@ def create_hwpc_report_1() -> HWPCReport:
                                      "time_enabled": 503490955,
                                      "time_running": 503490955}}}}}
 
-    return HWPCReport.create_report_from_dict(report_dict)
+    return HWPCReportsGroup.create_reports_group_from_dicts([report_dict])
 
 
 @pytest.fixture
-def create_hwpc_report_2() -> HWPCReport:
-    """ Creates a HWPC Report """
+def create_hwpc_reports_group_2() -> HWPCReportsGroup:
+    """ Creates a HWPC Reports Group """
     report_dict = {
         TIMESTAMP_CN: "2022-03-31T10:03:15.694Z",
         SENSOR_CN: "sensor",
@@ -174,12 +174,12 @@ def create_hwpc_report_2() -> HWPCReport:
                                             "time_enabled": 2511729308,
                                             "time_running": 2511729308}}}}}
 
-    return HWPCReport.create_report_from_dict(report_dict)
+    return HWPCReportsGroup.create_reports_group_from_dicts([report_dict])
 
 
 @pytest.fixture
-def create_hwpc_report_3() -> HWPCReport:
-    """ Creates a HWPC Report """
+def create_hwpc_reports_group_3() -> HWPCReportsGroup:
+    """ Creates a HWPC Reports Group """
     report_dict = {
         TIMESTAMP_CN: "2022-03-31T10:03:16.196Z",
         SENSOR_CN: "sensor",
@@ -236,12 +236,12 @@ def create_hwpc_report_3() -> HWPCReport:
                                     "LLC_MISSES": 44165,
                                     "INSTRUCTIONS_RETIRED": 865509}}}}}
 
-    return HWPCReport.create_report_from_dict(report_dict)
+    return HWPCReportsGroup.create_reports_group_from_dicts([report_dict])
 
 
 @pytest.fixture
-def create_hwpc_report_with_current_timestamp() -> HWPCReport:
-    """ Creates a HWPC Report """
+def create_hwpc_reports_group_with_current_timestamp() -> HWPCReportsGroup:
+    """ Creates a HWPC Reports Group """
     report_dict = {TIMESTAMP_CN: datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
                    SENSOR_CN: "sensor",
                    TARGET_CN: "all",
@@ -296,18 +296,20 @@ def create_hwpc_report_with_current_timestamp() -> HWPCReport:
                                      "time_enabled": 503490955,
                                      "time_running": 503490955}}}}}
 
-    return HWPCReport.create_report_from_dict(report_dict)
+    return HWPCReportsGroup.create_reports_group_from_dicts([report_dict])
 
 
 @pytest.fixture
-def create_3_hwpc_reports(create_hwpc_report_1, create_hwpc_report_2, create_hwpc_report_3) -> list:
-    return [create_hwpc_report_1, create_hwpc_report_2, create_hwpc_report_3]
+def create_3_hwpc_reports_groups(create_hwpc_reports_group_1, create_hwpc_reports_group_2,
+                                 create_hwpc_reports_group_3) -> list:
+    return [create_hwpc_reports_group_1, create_hwpc_reports_group_2, create_hwpc_reports_group_3]
 
 
 @pytest.fixture
-def create_4_hwpc_reports(create_hwpc_report_1, create_hwpc_report_2, create_hwpc_report_3,
-                          create_hwpc_report_with_current_timestamp) -> list:
-    return [create_hwpc_report_3, create_hwpc_report_with_current_timestamp, create_hwpc_report_1, create_hwpc_report_2]
+def create_4_hwpc_reports_groups(create_hwpc_reports_group_1, create_hwpc_reports_group_2, create_hwpc_reports_group_3,
+                                 create_hwpc_reports_group_with_current_timestamp) -> list:
+    return [create_hwpc_reports_group_3, create_hwpc_reports_group_with_current_timestamp, create_hwpc_reports_group_1,
+            create_hwpc_reports_group_2]
 
 
 @pytest.fixture
@@ -321,9 +323,6 @@ def create_smartwatts_config() -> SmartWattsFormulaConfig:
     return SmartWattsFormulaConfig(rapl_event="RAPL_ENERGY_PKG", min_samples_required=2, history_window_size=3,
                                    cpu_topology=cpu_topology, real_time_mode=False, scope=SmartWattsFormulaScope.CPU,
                                    socket_domain_value="0")
-
-    # config = smartwatts.SmartWattsFormulaConfig(rapl_event="CPU", min_samples_required=2,history_window_size=3,
-    #                                             socket_domain_value= "0", core_domain_value="3", real_time_mode= True)
 
 
 @pytest.fixture
@@ -358,11 +357,11 @@ def create_smartwatts_config_report_with_unknown_socket() -> SmartWattsFormulaCo
 #
 ##############################
 
-def test_smartwatts_not_processing_just_one_report(create_hwpc_report_1, create_smartwatts_config):
+def test_smartwatts_not_processing_just_one_report(create_hwpc_reports_group_1, create_smartwatts_config):
     """ Tests if the formula does not work with only a report """
 
     # Setup
-    the_source = Source(SimpleSource(create_hwpc_report_1))
+    the_source = Source(SimpleSource(create_hwpc_reports_group_1))
     the_destination = SimpleReportDestination()
     smartwatts_formula = Smartwatts(create_smartwatts_config)
 
@@ -371,18 +370,25 @@ def test_smartwatts_not_processing_just_one_report(create_hwpc_report_1, create_
     source(the_source).pipe(smartwatts_formula).subscribe(the_destination)
 
     # Check
-    assert the_destination.report is None  # The destination is not called
+    assert the_destination.reports_group is None  # The destination is not called
     assert len(smartwatts_formula.ticks) == 1  # There is at least one tick (process_report has been called)
-    assert smartwatts_formula.sensor == create_hwpc_report_1.get_sensor()  # The sensor of the formula is the sensor report
+    assert smartwatts_formula.sensor == create_hwpc_reports_group_1.sensor  # The sensor of the formula is the sensor report
+
+    for timestamp, groups_dict in smartwatts_formula.ticks.items():
+        assert timestamp == create_hwpc_reports_group_1.timestamp
+        assert len(groups_dict) == 1  # There is only one entry by timestamp
+        for target in create_hwpc_reports_group_1.report.get_targets():
+            assert target in groups_dict.keys()  # Each target is a key
 
 
-def test_smartwatts_process_report_does_not_call_destination_with_realtime_mode_and_3_reports(create_3_hwpc_reports,
-                                                                                              create_smartwatts_config):
+def test_smartwatts_process_report_does_not_call_destination_with_realtime_mode_and_3_reports(
+        create_3_hwpc_reports_groups,
+        create_smartwatts_config):
     """ Tests if the formula does not work with three report and real_time_mode = False """
 
     # Setup
 
-    the_source = Source(MultipleReportSource(create_3_hwpc_reports))
+    the_source = Source(MultipleReportSource(create_3_hwpc_reports_groups))
     the_destination = SimpleReportDestination()
     smartwatts_formula = Smartwatts(create_smartwatts_config)
 
@@ -392,16 +398,25 @@ def test_smartwatts_process_report_does_not_call_destination_with_realtime_mode_
 
     # Check
     assert len(smartwatts_formula.ticks) == 3  # The three ticks has been processed (process_report has been called)
-    assert the_destination.report is None  # The destination is called
+    assert the_destination.reports_group is None  # The destination is called
+
+    for reports_group in create_3_hwpc_reports_groups:
+        assert reports_group.timestamp in smartwatts_formula.ticks.keys()  # Each timestamp is a key
+        reports_groups_dict = smartwatts_formula.ticks[reports_group.timestamp]
+        targets_to_check = reports_groups_dict.keys()
+        assert len(targets_to_check) == len(reports_group.report.get_targets()) # targets are the same
+        assert targets_to_check == reports_group.report.get_targets()
+        for _, current_reports_group_to_check in reports_groups_dict.items(): # the reports_group is stored
+            assert current_reports_group_to_check == reports_group
 
 
-def test_smartwatts_process_report_calls_destination_with_realtime_mode_and_3_reports(create_3_hwpc_reports,
+def test_smartwatts_process_report_calls_destination_with_realtime_mode_and_3_reports(create_3_hwpc_reports_groups,
                                                                                       create_smartwatts_config):
     """ Tests if the formula works with three reports and real_time_mode = True """
 
     # Setup
     create_smartwatts_config.real_time_mode = True
-    the_source = Source(MultipleReportSource(create_3_hwpc_reports))
+    the_source = Source(MultipleReportSource(create_3_hwpc_reports_groups))
     the_destination = MultipleReportDestination()
     smartwatts_formula = Smartwatts(create_smartwatts_config)
 
@@ -411,16 +426,17 @@ def test_smartwatts_process_report_calls_destination_with_realtime_mode_and_3_re
 
     # Check
     assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called once)
-    assert len(the_destination.reports) == 1  # The destination is called
+    assert len(the_destination.reports_groups) == 1  # The destination is called
 
 
-def test_smartwatts_process_report_calls_1_time_destination_with_realtime_mode_and_4_reports(create_4_hwpc_reports,
-                                                                                             create_smartwatts_config):
+def test_smartwatts_process_report_calls_1_time_destination_with_realtime_mode_and_4_reports(
+        create_4_hwpc_reports_groups,
+        create_smartwatts_config):
     """ Tests if the formula works with four reports and real_time_mode = True """
 
     # Setup
     create_smartwatts_config.real_time_mode = True
-    the_source = Source(MultipleReportSource(create_4_hwpc_reports))
+    the_source = Source(MultipleReportSource(create_4_hwpc_reports_groups))
     the_destination = MultipleReportDestination()
     smartwatts_formula = Smartwatts(create_smartwatts_config)
 
@@ -430,16 +446,17 @@ def test_smartwatts_process_report_calls_1_time_destination_with_realtime_mode_a
 
     # Check
     assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called once)
-    assert len(the_destination.reports) == 1  # The destination is called once because one of the reports do not have
+    assert len(
+        the_destination.reports_groups) == 1  # The destination is called once because one of the reports do not have
     # all as target
 
 
-def test_smartwatts_process_report_throws_exception_when_rapl_event_does_not_exist(create_3_hwpc_reports,
+def test_smartwatts_process_report_throws_exception_when_rapl_event_does_not_exist(create_3_hwpc_reports_groups,
                                                                                    create_smartwatts_config_report_with_unknown_event):
     """ Tests if the formula throws an exception if the counter event does not exist """
     # Setup
     create_smartwatts_config_report_with_unknown_event.real_time_mode = True
-    the_source = Source(MultipleReportSource(create_3_hwpc_reports))
+    the_source = Source(MultipleReportSource(create_3_hwpc_reports_groups))
     the_destination = MultipleReportDestination()
     smartwatts_formula = Smartwatts(create_smartwatts_config_report_with_unknown_event)
 
@@ -448,16 +465,16 @@ def test_smartwatts_process_report_throws_exception_when_rapl_event_does_not_exi
         source(the_source).pipe(smartwatts_formula).subscribe(the_destination)
 
     # Check
-    assert len(the_destination.reports) == 0  # The destination is not called because of the exception
+    assert len(the_destination.reports_groups) == 0  # The destination is not called because of the exception
     assert len(smartwatts_formula.ticks) == 2  # Because of a tick, we get the exception
 
 
-def test_smartwatts_process_report_throws_exception_when_socket_does_not_exist(create_3_hwpc_reports,
+def test_smartwatts_process_report_throws_exception_when_socket_does_not_exist(create_3_hwpc_reports_groups,
                                                                                create_smartwatts_config_report_with_unknown_socket):
     """ Tests if the formula throws an exception if the counter event does not exist """
     # Setup
     create_smartwatts_config_report_with_unknown_socket.real_time_mode = True
-    the_source = Source(MultipleReportSource(create_3_hwpc_reports))
+    the_source = Source(MultipleReportSource(create_3_hwpc_reports_groups))
     the_destination = MultipleReportDestination()
     smartwatts_formula = Smartwatts(create_smartwatts_config_report_with_unknown_socket)
 
@@ -465,5 +482,5 @@ def test_smartwatts_process_report_throws_exception_when_socket_does_not_exist(c
     with pytest.raises(SmartWattsException) as exec_info:
         source(the_source).pipe(smartwatts_formula).subscribe(the_destination)
 
-    assert len(the_destination.reports) == 0  # The destination is not called because of the exception
+    assert len(the_destination.reports_groups) == 0  # The destination is not called because of the exception
     assert len(smartwatts_formula.ticks) == 2  # Because of a tick, we get the exception
