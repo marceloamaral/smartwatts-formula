@@ -43,8 +43,8 @@ import pymongo
 import pytest as pytest
 
 from powerapi.quantity import MHz, W
-from powerapi.rx.hwpc_report import GROUPS_CN, HWPCReport
-from powerapi.rx.report import TIMESTAMP_CN, SENSOR_CN, TARGET_CN, DATE_FORMAT
+from powerapi.rx.hwpc_reports_group import GROUPS_CN, HWPCReportsGroup
+from powerapi.rx.reports_group import TIMESTAMP_CN, SENSOR_CN, TARGET_CN, DATE_FORMAT
 from powerapi.rx.source import source
 from powerapi.sources import MongoSource
 
@@ -317,7 +317,7 @@ def create_3_hwpc_dicts(create_hwpc_dict_4, create_hwpc_dict_2, create_hwpc_dict
 @pytest.fixture
 def create_4_hwpc_dicts(create_hwpc_dict_1, create_hwpc_dict_2, create_hwpc_dict_3,
                         create_hwpc_dict_4) -> list:
-    return [create_hwpc_dict_3, create_hwpc_dict_4, create_hwpc_dict_1, create_hwpc_dict_2]
+    return [create_hwpc_dict_4, create_hwpc_dict_3, create_hwpc_dict_1, create_hwpc_dict_2]
 
 
 @pytest.fixture
@@ -357,7 +357,7 @@ def test_smartwatts_gets_report_from_mongodb_with_realtime_mode_and_4_reports(cr
                               collection_name=MONGO_INPUT_COLLECTION_NAME, db_name=MONGO_DATABASE_NAME)
     mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
                                collection_name=MONGO_INPUT_COLLECTION_NAME,
-                               report_type=HWPCReport, stream_mode=False)
+                               group_type=HWPCReportsGroup, stream_mode=False)
     the_destination = MultipleReportDestination()
     smartwatts_formula = Smartwatts(create_smartwatts_config)
 
@@ -366,8 +366,9 @@ def test_smartwatts_gets_report_from_mongodb_with_realtime_mode_and_4_reports(cr
     mongo_source.close()
 
     # Check
+    assert len(mongo_source.current_group_dicts) == 1
     assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
-    assert len(the_destination.reports) == 1  # Only one report has been stored
+    assert len(the_destination.reports_groups) == 1  # Only one report has been stored
 
 def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_3_reports(create_smartwatts_config,
                                                                                 create_3_hwpc_dicts):
@@ -382,7 +383,7 @@ def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_3_reports(c
                               collection_name=MONGO_INPUT_COLLECTION_NAME, db_name=MONGO_DATABASE_NAME)
     mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
                                 collection_name=MONGO_INPUT_COLLECTION_NAME,
-                                report_type=HWPCReport, stream_mode=False)
+                                group_type=HWPCReportsGroup, stream_mode=False)
     the_destination = MultipleReportDestination()
     smartwatts_formula = Smartwatts(create_smartwatts_config)
 
@@ -391,8 +392,9 @@ def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_3_reports(c
     mongo_source.close()
 
     # Check
+    assert len(mongo_source.current_group_dicts) == 1
     assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
-    assert len(the_destination.reports) == 1  # Only one report has been stored
+    assert len(the_destination.reports_groups) == 0  # Only one report has been stored
 
 
 def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_2_reports(create_smartwatts_config,
@@ -408,7 +410,7 @@ def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_2_reports(c
                               collection_name=MONGO_INPUT_COLLECTION_NAME, db_name=MONGO_DATABASE_NAME)
     mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
                                 collection_name=MONGO_INPUT_COLLECTION_NAME,
-                                report_type=HWPCReport, stream_mode=False)
+                                group_type=HWPCReportsGroup, stream_mode=False)
     the_destination = MultipleReportDestination()
     smartwatts_formula = Smartwatts(create_smartwatts_config)
 
@@ -417,5 +419,6 @@ def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_2_reports(c
     mongo_source.close()
 
     # Check
-    assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
-    assert len(the_destination.reports) == 0  # The destination is not called
+    assert len(mongo_source.current_group_dicts) == 1 # One report is in the source
+    assert len(smartwatts_formula.ticks) == 1  # There is only one tick (process_report has been called twice)
+    assert len(the_destination.reports_groups) == 0  # The destination is not called
