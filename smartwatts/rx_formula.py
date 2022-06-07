@@ -246,7 +246,6 @@ class Smartwatts(Formula):
         for current_target in reports_group.report.get_targets():
             timestamp_dict.update({current_target: reports_group})
 
-
         # start to process the oldest tick only after receiving at least 5 ticks.
         # we wait before processing the ticks in order to mitigate the possible delay of the sensor/database.
         if self.config.real_time_mode:
@@ -376,10 +375,15 @@ class Smartwatts(Formula):
 
         # compute per-target power report
         for target_name, target_report in hwpc_reports_group.items():
+
             target_core = self._gen_core_events_group(target_report)
+
             raw_target_power = model.compute_power_estimation(target_core) * current_used_power_unit
+
             target_power, target_ratio = model.cap_power_estimation(raw_target_power, raw_global_power)
+
             target_power = model.apply_intercept_share(target_power, target_ratio)
+
             power_reports.append(
                 self._gen_power_report(
                     timestamp=timestamp,
@@ -388,7 +392,7 @@ class Smartwatts(Formula):
                     raw_power=raw_target_power,
                     power=target_power,
                     ratio=target_ratio,
-                    metadata=target_report.meta.metadata,
+                    metadata=target_report.metadata,
                     error=fabs((target_power - raw_global_power).magnitude) * current_used_power_unit
                 ))
 
@@ -442,6 +446,7 @@ class Smartwatts(Formula):
             Return:
                 Power report filled with the given parameters
         """
+
         metadata.update({
             'scope': self.config.scope.value,
             'socket': self.config.socket_domain_value,
@@ -450,10 +455,12 @@ class Smartwatts(Formula):
             'predict': raw_power,
             'error': error,
         })
-        return PowerReportsGroup.create_reports_group_from_values(timestamp=timestamp, sensor=self.sensor,
-                                                                  target=target,
-                                                                  power=power,
-                                                                  metadata=metadata)
+        rg = PowerReportsGroup.create_reports_group_from_values(timestamp=timestamp, sensor=self.sensor,
+                                                                target=target,
+                                                                power=power,
+                                                                metadata=metadata)
+
+        return rg
 
     def _gen_rapl_events_group(self, system_report_group: HWPCReportsGroup):
         """ Generate an events group with the RAPL reference event converted in Watts for the current socket
@@ -494,7 +501,6 @@ class Smartwatts(Formula):
             Return:
                 A dictionary containing the average of the MSR counters
         """
-        mrs_average_values_dict = defaultdict(int)
 
         # We get the mrs values
 
@@ -525,6 +531,7 @@ class Smartwatts(Formula):
         core_events_group_dict = reports_group.compute_group_event_sum_excluding_target(group=CORE_GROUP,
                                                                                         target=ALL_TARGET,
                                                                                         socket=self.config.socket_domain_value)
+
         if core_events_group_dict is None:
             raise SmartWattsException(msg=create_exception_message_missing_index(entity_name=
                                                                                  self.config.socket_domain_value,

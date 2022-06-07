@@ -37,7 +37,7 @@
 ##############################
 from powerapi.destination import InfluxDestination
 from powerapi.quantity import W, MHz, GHz, ms
-from powerapi.rx import HWPCReport
+from powerapi.rx import HWPCReportsGroup
 from powerapi.rx.source import source
 from powerapi.sources import MongoSource
 
@@ -48,11 +48,12 @@ from powerapi.sources import MongoSource
 ##############################
 INFLUX_URI = "localhost"
 INFLUX_PORT = 8086
-INFLUX_DBNAME = "db_benchmarks_rx_output"
+INFLUX_DBNAME = "db_benchmarks_rx_output_opt"
 
 MONGO_URI = "mongodb://localhost:27017/"
 MONGO_COLLECTION_NAME = "collection_test_data_set"
 MONGO_DATABASE_NAME = "db_data_set_for_testing"
+# MONGO_DATABASE_NAME = "small_data_set_for_testing"
 
 ##############################
 #
@@ -84,7 +85,7 @@ if __name__ == "__main__":
 
     mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
                                collection_name=MONGO_COLLECTION_NAME,
-                               report_type=HWPCReport, stream_mode=False)
+                               group_type=HWPCReportsGroup, stream_mode=False)
     # Destination
     influx_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
 
