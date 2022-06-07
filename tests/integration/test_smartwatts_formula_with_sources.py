@@ -47,6 +47,7 @@ from powerapi.rx.hwpc_reports_group import GROUPS_CN, HWPCReportsGroup
 from powerapi.rx.reports_group import TIMESTAMP_CN, SENSOR_CN, TARGET_CN, DATE_FORMAT
 from powerapi.rx.source import source
 from powerapi.sources import MongoSource
+from powerapi.sources.mongosource import DICTS_CN
 
 from smartwatts.context import SmartWattsFormulaConfig, SmartWattsFormulaScope
 from smartwatts.rx_formula import RAPL_GROUP, MSR_GROUP, MPERF_EVENT, APERF_EVENT, CORE_GROUP, Smartwatts
@@ -366,7 +367,7 @@ def test_smartwatts_gets_report_from_mongodb_with_realtime_mode_and_4_reports(cr
     mongo_source.close()
 
     # Check
-    assert len(mongo_source.current_group_dicts) == 1
+    assert len(mongo_source.current_group_dicts[DICTS_CN]) == 1
     assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
     assert len(the_destination.reports_groups) == 1  # Only one report has been stored
 
@@ -392,7 +393,7 @@ def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_3_reports(c
     mongo_source.close()
 
     # Check
-    assert len(mongo_source.current_group_dicts) == 1
+    assert len(mongo_source.current_group_dicts[DICTS_CN]) == 1
     assert len(smartwatts_formula.ticks) == 2  # There are only two ticks (process_report has been called twice)
     assert len(the_destination.reports_groups) == 0  # Only one report has been stored
 
@@ -419,6 +420,6 @@ def test_smartwatts_gets_reports_from_mongodb_with_realtime_mode_and_2_reports(c
     mongo_source.close()
 
     # Check
-    assert len(mongo_source.current_group_dicts) == 1 # One report is in the source
+    assert len(mongo_source.current_group_dicts[DICTS_CN]) == 1 # One report is in the source
     assert len(smartwatts_formula.ticks) == 1  # There is only one tick (process_report has been called twice)
     assert len(the_destination.reports_groups) == 0  # The destination is not called

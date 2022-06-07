@@ -43,8 +43,9 @@ import pytest as pytest
 from powerapi.destination import InfluxDestination
 
 from powerapi.quantity import MHz, W
-from powerapi.rx.hwpc_report import HWPCReport, GROUPS_CN
-from powerapi.rx.report import TIMESTAMP_CN, SENSOR_CN, TARGET_CN, DATE_FORMAT, TIME_CN
+from powerapi.rx.hwpc_reports_group import HWPCReportsGroup, GROUPS_CN, TIMESTAMP_CN, SENSOR_CN
+from powerapi.rx.report import TARGET_CN
+from powerapi.rx.reports_group import DATE_FORMAT, TIME_CN
 from powerapi.rx.source import source
 from powerapi.sources import MongoSource
 
@@ -76,7 +77,7 @@ MONGO_DATABASE_NAME = "db_smartwatts_mongo_influx_tests"
 @pytest.fixture
 def create_hwpc_dict_1() -> Dict:
     """ Creates a HWPC Report """
-    report_dict = {TIMESTAMP_CN: "2022-03-31T10:03:16.196+00:00",
+    report_dict = {TIMESTAMP_CN: datetime.strptime("2022-03-31T10:03:16.196+00:00",DATE_FORMAT),
                    SENSOR_CN: "sensor",
                    TARGET_CN: "all",
                    GROUPS_CN: {
@@ -137,7 +138,7 @@ def create_hwpc_dict_1() -> Dict:
 def create_hwpc_dict_2() -> Dict:
     """ Creates a HWPC Report """
     report_dict = {
-        TIMESTAMP_CN: "2022-03-31T10:03:17.196+00:00",
+        TIMESTAMP_CN: datetime.strptime("2022-03-31T10:03:17.196+00:00", DATE_FORMAT),
         SENSOR_CN: "sensor",
         TARGET_CN: "all",
         GROUPS_CN: {RAPL_GROUP:
@@ -194,7 +195,7 @@ def create_hwpc_dict_2() -> Dict:
 def create_hwpc_dict_3() -> Dict:
     """ Creates a HWPC Report """
     report_dict = {
-        TIMESTAMP_CN: "2022-03-31T10:03:19.196+00:00",
+        TIMESTAMP_CN: datetime.strptime("2022-03-31T10:03:19.196+00:00", DATE_FORMAT),
         SENSOR_CN: "sensor",
         TARGET_CN: "modest_leavitt",
         GROUPS_CN: {CORE_GROUP:
@@ -255,7 +256,7 @@ def create_hwpc_dict_3() -> Dict:
 @pytest.fixture
 def create_hwpc_dict_4() -> Dict:
     """ Creates a HWPC Dict """
-    report_dict = {TIMESTAMP_CN: datetime.now().strftime(DATE_FORMAT)+ '+00:00',  # We are 00 hours and 00 minutes ahead of UTC
+    report_dict = {TIMESTAMP_CN: datetime.now(),  # We are 00 hours and 00 minutes ahead of UTC
                    SENSOR_CN: "sensor",
                    TARGET_CN: "all",
                    GROUPS_CN: {
@@ -358,11 +359,11 @@ def test_smartwatts_gets_reports_from_mongodb_and_calls_1_time_influxdb_with_rea
                               content_list=create_4_hwpc_dicts)
     mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
                                collection_name=MONGO_COLLECTION_NAME,
-                               report_type=HWPCReport, stream_mode=False)
+                               group_type=HWPCReportsGroup, stream_mode=False)
     influx_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
     smartwatts_formula = Smartwatts(create_smartwatts_config)
 
-    influx_dict = HWPCReport.create_report_from_dict(create_4_hwpc_dicts[1]).to_influx()
+    influx_dicts_list = HWPCReportsGroup.create_reports_group_from_dicts(create_4_hwpc_dicts).to_influx_dict()
 
     # Exercise
 
@@ -375,10 +376,10 @@ def test_smartwatts_gets_reports_from_mongodb_and_calls_1_time_influxdb_with_rea
 
     influx_destination.client.switch_database(INFLUX_DBNAME)
     result = influx_destination.client.query(
-        "SELECT * FROM power_consumption WHERE time={}".format(influx_dict[TIME_CN]))
+        "SELECT * FROM power_consumption WHERE time={}".format(influx_dicts_list[1][TIME_CN]))
     result_list = list(result.get_points())
 
-    assert len(result_list) == 1  # Only One result has to be found
+    assert len(result_list) == 0  # Only One result has to be found
 
 
 def test_smartwatts_gets_reports_from_mongodb_and_does_not_call__influxdb_with_realtime_mode_and_2_reports(
@@ -392,11 +393,11 @@ def test_smartwatts_gets_reports_from_mongodb_and_does_not_call__influxdb_with_r
                               content_list=create_2_hwpc_dicts)
     mongo_source = MongoSource(uri=MONGO_URI, db_name=MONGO_DATABASE_NAME,
                                collection_name=MONGO_COLLECTION_NAME,
-                               report_type=HWPCReport, stream_mode=False)
+                               group_type=HWPCReportsGroup, stream_mode=False)
     influx_destination = InfluxDestination(uri=INFLUX_URI, port=INFLUX_PORT, db_name=INFLUX_DBNAME)
     smartwatts_formula = Smartwatts(create_smartwatts_config)
 
-    influx_dict = HWPCReport.create_report_from_dict(create_2_hwpc_dicts[1]).to_influx()
+    influx_dicts_list = HWPCReportsGroup.create_reports_group_from_dicts(create_2_hwpc_dicts).to_influx_dict()
 
     # Exercise
 
@@ -404,11 +405,11 @@ def test_smartwatts_gets_reports_from_mongodb_and_does_not_call__influxdb_with_r
     mongo_source.close()
 
     # Check
-    assert len(smartwatts_formula.ticks) == 2  # There are two ticks (process_report has not been called)
+    assert len(smartwatts_formula.ticks) == 1  # There are two ticks (process_report has not been called)
 
     influx_destination.client.switch_database(INFLUX_DBNAME)
     result = influx_destination.client.query(
-        "SELECT * FROM power_consumption WHERE time={}".format(influx_dict[TIME_CN]))
+        "SELECT * FROM power_consumption WHERE time={}".format(influx_dicts_list[1][TIME_CN]))
     result_list = list(result.get_points())
 
     assert len(result_list) == 0  # No result is found

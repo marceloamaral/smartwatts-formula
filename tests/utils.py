@@ -39,7 +39,7 @@ from typing import Optional, Dict
 
 import pymongo
 from powerapi.rx import BaseSource, Destination
-from powerapi.rx.hwpc_report import HWPCReport
+from powerapi.rx.hwpc_reports_group import HWPCReportsGroup
 from rx.core import Observer
 from rx.core.abc import Scheduler
 
@@ -47,14 +47,14 @@ from rx.core.abc import Scheduler
 class SimpleSource(BaseSource):
     """Simple source for testing purposes"""
 
-    def __init__(self, report: HWPCReport) -> None:
+    def __init__(self, reports_group: HWPCReportsGroup) -> None:
         """ Creates a simple source that sends one report to the formula
 
         Args:
 
         """
         super().__init__()
-        self.report = report
+        self.reports_group = reports_group
 
     def subscribe(self, operator: Observer, scheduler: Optional[Scheduler] = None):
         """ Required method for retrieving data from a source by a Formula
@@ -64,7 +64,7 @@ class SimpleSource(BaseSource):
                 scheduler: Used for parallelism. Not used for the time being
 
         """
-        operator.on_next(self.report)
+        operator.on_next(self.reports_group)
 
     def close(self):
         """ Closes the access to the data source"""
@@ -74,14 +74,14 @@ class SimpleSource(BaseSource):
 class MultipleReportSource(BaseSource):
     """ Source sending several reports  testing purposes """
 
-    def __init__(self, reports: list) -> None:
+    def __init__(self, reports_groups: list) -> None:
         """ Creates a fake source
 
         Args:
 
         """
         super().__init__()
-        self.reports = reports
+        self.reports_groups = reports_groups
 
     def subscribe(self, operator: Observer, scheduler: Optional[Scheduler] = None):
         """ Required method for retrieving data from a source by a Formula
@@ -91,8 +91,8 @@ class MultipleReportSource(BaseSource):
                 scheduler: Used for parallelism. Not used for the time being
 
         """
-        for report in self.reports:
-            operator.on_next(report)
+        for reports_group in self.reports_groups:
+            operator.on_next(reports_group)
 
     def close(self):
         """ Closes the access to the data source"""
@@ -109,15 +109,15 @@ class SimpleReportDestination(Destination):
 
         """
         super().__init__()
-        self.report = None
+        self.reports_group = None
 
-    def store_report(self, report):
+    def store_report(self, reports_group):
         """ Required method for storing a report
 
             Args:
                 report: The report that will be stored
         """
-        self.report = report
+        self.reports_group = reports_group
 
     def on_completed(self) -> None:
         pass
@@ -136,15 +136,15 @@ class MultipleReportDestination(Destination):
 
         """
         super().__init__()
-        self.reports = []
+        self.reports_groups = []
 
-    def store_report(self, report):
+    def store_report(self, reports_group):
         """ Required method for storing a report
 
             Args:
                 report: The report that will be stored
         """
-        self.reports.append(report)
+        self.reports_groups.append(reports_group)
 
     def on_completed(self) -> None:
         pass
